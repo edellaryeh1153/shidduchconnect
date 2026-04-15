@@ -7,6 +7,9 @@ import { useAuth, canDo } from "@/lib/auth-context";
 import AppShell from "@/components/AppShell";
 import { SCHOOLS_GIRL, SCHOOLS_BOY, STATUS_COLORS } from "@/types";
 import { generateProfilePDF } from "@/components/ProfilePDF";
+import PhotoGallery from "@/components/PhotoGallery";
+import ProfileTags from "@/components/ProfileTags";
+import { computeScore } from "@/lib/scoring";
 
 export default function ProfileDetailPage() {
   const { id } = useParams();
@@ -21,19 +24,18 @@ export default function ProfileDetailPage() {
   const [showShare, setShowShare] = useState(false);
   const [photoUrl, setPhotoUrl] = useState("");
   const [resumeDownloadUrl, setResumeDownloadUrl] = useState("");
+  const [aiSuggestions, setAiSuggestions] = useState<any[]>([]);
+  const [showAiSuggestions, setShowAiSuggestions] = useState(false);
 
   async function load() {
     const { data: p } = await supabase.from("profiles").select("*").eq("id", id).single();
     if (p) {
       setProfile(p);
 
-      // Get signed photo URL
       if (p.photo_url) {
         const { data: photoData } = await supabase.storage.from("photos").createSignedUrl(p.photo_url, 3600);
         if (photoData?.signedUrl) setPhotoUrl(photoData.signedUrl);
       }
-
-      // Get signed resume URL (only if viewer has access — RLS enforces this)
       if (p.resume_url) {
         const { data: resumeData } = await supabase.storage.from("resumes").createSignedUrl(p.resume_url, 3600);
         if (resumeData?.signedUrl) setResumeDownloadUrl(resumeData.signedUrl);
@@ -50,6 +52,22 @@ export default function ProfileDetailPage() {
       setMatches(mRes.data || []);
       setShares(sRes.data || []);
       setAllUsers(uRes.data || []);
+
+      // AI suggestions
+      const { data: allProfiles } = await supabase.from("profiles").select("*");
+      if (allProfiles) {
+        const matchedIds = (mRes.data || []).map((m: any) => m.boy_profile_id === id ? m.girl_profile_id : m.boy_profile_id);
+        const candidates = allProfiles
+          .filter((c: any) => c.gender !== p.gender && !matchedIds.includes(c.id) && c.id !== id)
+          .map((c: any) => {
+            const fwd = computeScore(p, c);
+            const rev = computeScore(c, p);
+            return { ...c, fwd, rev, combined: Math.round((fwd + rev) / 2) };
+          })
+          .sort((a: any, b: any) => b.combined - a.combined)
+          .slice(0, 5);
+        setAiSuggestions(candidates);
+      }
     }
     setLoading(false);
     if (appUser) {
@@ -61,7 +79,6 @@ export default function ProfileDetailPage() {
 
   async function handleDelete() {
     if (!confirm("Delete this profile and all related matches? This cannot be undone.")) return;
-    // Delete files from storage
     if (profile.photo_url) await supabase.storage.from("photos").remove([profile.photo_url]);
     if (profile.resume_url) await supabase.storage.from("resumes").remove([profile.resume_url]);
     await supabase.from("profiles").delete().eq("id", id);
@@ -86,7 +103,7 @@ export default function ProfileDetailPage() {
   if (loading) return <AppShell><p className="text-gray-400">Loading...</p></AppShell>;
   if (!profile) return <AppShell><p className="text-gray-500">Profile not found.</p></AppShell>;
 
-  const isGirl = profile.gender === "Girl" || profile.gender === "girl";
+  const isGirl = profile.gender === "Girl";
   const isOwner = profile.created_by === appUser?.id;
   const isAdmin = appUser?.role === "admin";
   const schoolList = isGirl ? SCHOOLS_GIRL : SCHOOLS_BOY;
@@ -142,8 +159,8 @@ export default function ProfileDetailPage() {
       <button onClick={() => router.push("/profiles")} className="text-sm text-[#6B8E9B] hover:underline mb-4 block">← Back to Profiles</button>
       <div className="bg-white rounded-xl p-6 border border-gray-200 max-w-4xl">
 
-        {/* Header with photo */}
-        <div className="flex justify-between items-start mb-6">
+        {/* Header */}
+        <div className="flex justify-between items-start mb-4">
           <div className="flex items-center gap-4">
             {photoUrl ? (
               <img src={photoUrl} alt={profile.name} className="w-20 h-20 rounded-full object-cover border-2 border-gray-200" />
@@ -159,7 +176,7 @@ export default function ProfileDetailPage() {
                 {profile.ready_to_date && profile.ready_to_date !== "Yes" ? ` · ${profile.ready_to_date}` : ""}
               </p>
               <p className="text-xs text-gray-400 mt-0.5">
-                {profile.profile_visibility === "private" ? "🔒 Private profile" : profile.profile_visibility === "shared" ? "👥 Shared profile" : "🏢 Organization-wide"}
+                {profile.profile_visibility === "private" ? "🔒 Private" : profile.profile_visibility === "shared" ? "👥 Shared" : "🏢 Organization"}
               </p>
             </div>
           </div>
@@ -171,6 +188,11 @@ export default function ProfileDetailPage() {
               <button onClick={handleDelete} className="px-4 py-2 text-sm border border-red-400 text-red-600 rounded-lg hover:bg-red-50">Delete</button>
             </div>
           )}
+        </div>
+
+        {/* Tags */}
+        <div className="mb-6">
+          <ProfileTags profileId={id as string} tags={profile.tags || []} canEdit={isOwner || isAdmin} onUpdate={(newTags) => setProfile({ ...profile, tags: newTags })} />
         </div>
 
         {/* Share panel */}
@@ -206,7 +228,7 @@ export default function ProfileDetailPage() {
             <div>
               <div className="text-sm font-medium text-[#1B3A4B]">📄 Shidduch Resume Attached</div>
               <div className="text-xs text-gray-500 mt-0.5">
-                {isOwner ? "Only you and shadchanim you share with can access this." : "Shared with you by the profile owner."}
+                {isOwner ? "This is the resume they gave you. Only you and shadchanim you share with can access it." : "Shared with you by the profile owner."}
               </div>
             </div>
             <a href={resumeDownloadUrl} target="_blank" rel="noopener noreferrer"
@@ -215,6 +237,11 @@ export default function ProfileDetailPage() {
             </a>
           </div>
         )}
+
+        {/* Photo Gallery */}
+        <div className="mb-6">
+          <PhotoGallery profileId={id as string} canEdit={isOwner || isAdmin} />
+        </div>
 
         {/* Info sections */}
         <div className="grid grid-cols-2 gap-6 mb-6">
@@ -275,7 +302,7 @@ export default function ProfileDetailPage() {
         {/* References */}
         {profile.references && <div className="mb-6"><h3 className={secTitle} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>References</h3><p className="text-sm text-gray-600 whitespace-pre-wrap">{profile.references}</p></div>}
 
-        {/* Private Shadchan Notes — only visible to owner */}
+        {/* Private Notes */}
         {profile.notes && isOwner && (
           <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
             <h3 className="text-sm font-semibold text-amber-800 mb-1">🔒 Your Private Notes</h3>
@@ -294,12 +321,48 @@ export default function ProfileDetailPage() {
               {profile.preferences.hashkafa?.length > 0 && <div><div className="text-[10px] text-gray-400 uppercase tracking-wider">Hashkafa</div><div className="text-sm font-medium">{profile.preferences.hashkafa.join(", ")}</div></div>}
               {profile.preferences.build?.length > 0 && <div><div className="text-[10px] text-gray-400 uppercase tracking-wider">Build</div><div className="text-sm font-medium">{profile.preferences.build.join(", ")}</div></div>}
               {profile.preferences.hairColor?.length > 0 && <div><div className="text-[10px] text-gray-400 uppercase tracking-wider">Hair</div><div className="text-sm font-medium">{profile.preferences.hairColor.join(", ")}</div></div>}
-              {profile.preferences.learningStatus?.length > 0 && <div><div className="text-[10px] text-gray-400 uppercase tracking-wider">Learning Status</div><div className="text-sm font-medium">{profile.preferences.learningStatus.join(", ")}</div></div>}
-              {profile.preferences.smoking && <div><div className="text-[10px] text-gray-400 uppercase tracking-wider">Smoking</div><div className="text-sm font-medium">{profile.preferences.smoking === "No" ? "Non-smoker only" : "Open to smoker"}</div></div>}
+              {profile.preferences.learningStatus?.length > 0 && <div><div className="text-[10px] text-gray-400 uppercase tracking-wider">Learning</div><div className="text-sm font-medium">{profile.preferences.learningStatus.join(", ")}</div></div>}
+              {profile.preferences.smoking && <div><div className="text-[10px] text-gray-400 uppercase tracking-wider">Smoking</div><div className="text-sm font-medium">{profile.preferences.smoking === "No" ? "Non-smoker only" : "Open"}</div></div>}
             </div>
             {profile.preferences.notes && <p className="text-sm text-gray-600 mt-2 whitespace-pre-wrap">{profile.preferences.notes}</p>}
           </div>
         )}
+
+        {/* AI Match Suggestions */}
+        <div className="mb-6">
+          <div className="flex justify-between items-center mb-3">
+            <h3 className={`${secTitle} flex-1`} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>
+              ✦ Suggested Matches
+            </h3>
+            <button onClick={() => setShowAiSuggestions(!showAiSuggestions)} className="text-xs text-[#C4956A] hover:underline ml-3">
+              {showAiSuggestions ? "Hide" : `Show ${aiSuggestions.length} suggestions`}
+            </button>
+          </div>
+          {showAiSuggestions && (
+            <div className="space-y-2">
+              {aiSuggestions.length === 0 && <p className="text-gray-400 text-sm">No suggestions available.</p>}
+              {aiSuggestions.map((c) => (
+                <Link key={c.id} href={`/profiles/${c.id}`} className="flex items-center justify-between p-3 border border-gray-100 rounded-lg hover:shadow-sm transition-all">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-semibold ${c.gender === "Girl" ? "bg-[#C4956A]" : "bg-[#1B3A4B]"}`}>
+                      {c.name?.[0]}
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-[#1B3A4B]">{c.name}</div>
+                      <div className="text-xs text-gray-500">{c.age && `${c.age} · `}{c.hashkafa}{c.city && ` · ${c.city}`}</div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-lg font-bold" style={{ color: c.combined >= 70 ? "#5C8A5C" : c.combined >= 40 ? "#C4956A" : "#A0736C", fontFamily: "'Cormorant Garamond', Georgia, serif" }}>
+                      {c.combined}%
+                    </div>
+                    <div className="text-[9px] text-gray-400">Match</div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Match History */}
         <div className="mt-6">

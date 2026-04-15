@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase/client";
 import { useAuth, canDo } from "@/lib/auth-context";
 import AppShell from "@/components/AppShell";
 import { MATCH_STATUS_FLOW, STATUS_COLORS, DATE_FEEDBACK_OPTIONS } from "@/types";
+import { generateMatchReport } from "@/components/MatchReport";
 
 export default function MatchDetailPage() {
   const { id } = useParams();
@@ -117,7 +118,6 @@ export default function MatchDetailPage() {
   const nextStatuses = MATCH_STATUS_FLOW[match.status] || [];
   const inp = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#C4956A] focus:ring-1 focus:ring-[#C4956A]/30 bg-white";
 
-  // Progress
   const allSteps = ["Idea", "Sent", "Response", "Both Agreed", "Dating", "Engaged", "Married"];
   const stepMap: Record<string, number> = {
     "Suggested": 0, "Sent to Boy Side": 1, "Sent to Girl Side": 1,
@@ -144,6 +144,7 @@ export default function MatchDetailPage() {
                 <span className="text-xs px-3 py-1 rounded-full text-white font-medium" style={{ background: STATUS_COLORS[match.status] || "#888" }}>{match.status}</span>
                 <span className="text-xs text-gray-400">Started {new Date(match.created_at).toLocaleDateString()}</span>
                 <span className="text-xs text-gray-400">· Contacted {match.contacted_first} side first</span>
+                <button onClick={() => generateMatchReport(match, notes, dates)} className="text-xs text-[#5C8A5C] hover:underline ml-2">📄 Print Report</button>
               </div>
             </div>
           </div>
@@ -163,7 +164,7 @@ export default function MatchDetailPage() {
           )}
         </div>
 
-        {/* Action buttons — next steps */}
+        {/* Next steps */}
         {canDo(appUser, "edit") && nextStatuses.length > 0 && (
           <div className="p-6 bg-gray-50 border-b border-gray-100">
             <h3 className="text-sm font-semibold text-[#1B3A4B] mb-2">Next Steps</h3>
@@ -192,7 +193,7 @@ export default function MatchDetailPage() {
         )}
 
         <div className="p-6">
-          {/* Response notes if any */}
+          {/* Response notes */}
           {(match.boy_response_notes || match.girl_response_notes) && (
             <div className="mb-6 grid grid-cols-2 gap-4">
               {match.boy_response_notes && (
@@ -293,7 +294,7 @@ export default function MatchDetailPage() {
                     )}
                   </div>
 
-                  {/* Feedback display for completed dates */}
+                  {/* Completed feedback */}
                   {d.status === "completed" && (d.boy_feedback || d.girl_feedback) && (
                     <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-gray-100">
                       <div className="p-2 bg-blue-50 rounded">

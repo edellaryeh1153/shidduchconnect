@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import AppShell from "@/components/AppShell";
+import AIResumeReader from "@/components/AIResumeReader";
 import {
   HAIR_COLORS, SKIN_TONES, EYE_COLORS, HASHKAFOS, BUILDS, HEIGHTS,
   SCHOOLS_GIRL, SCHOOLS_BOY, LEARNING_STATUSES, SMOKING_OPTIONS,
@@ -15,6 +16,7 @@ export default function NewProfilePage() {
   const { appUser } = useAuth();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [duplicates, setDuplicates] = useState<any[]>([]);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState("");
   const [resumeFile, setResumeFile] = useState<File | null>(null);
@@ -37,6 +39,43 @@ export default function NewProfilePage() {
     const arr = (f as any)[key] as string[];
     set(key, arr.includes(val) ? arr.filter((v: string) => v !== val) : [...arr, val]);
   };
+
+  function handleAIFields(fields: Record<string, any>) {
+    setF((prev) => ({
+      ...prev,
+      name: fields.name || prev.name,
+      gender: fields.gender || prev.gender,
+      dateOfBirth: fields.dateOfBirth || prev.dateOfBirth,
+      height: fields.height || prev.height,
+      hairColor: fields.hairColor || prev.hairColor,
+      eyeColor: fields.eyeColor || prev.eyeColor,
+      build: fields.build || prev.build,
+      hashkafa: fields.hashkafa || prev.hashkafa,
+      city: fields.city || prev.city,
+      state: fields.state || prev.state,
+      occupation: fields.occupation || prev.occupation,
+      learningStatus: fields.learningStatus || prev.learningStatus,
+      shul: fields.shul || prev.shul,
+      rav: fields.rav || prev.rav,
+      camp: fields.camp || prev.camp,
+      numSiblings: fields.numSiblings?.toString() || prev.numSiblings,
+      positionInFamily: fields.positionInFamily || prev.positionInFamily,
+      about: fields.about || prev.about,
+      lookingForDescription: fields.lookingForDescription || prev.lookingForDescription,
+      references: fields.references || prev.references,
+      fatherName: fields.fatherName || prev.fatherName,
+      motherName: fields.motherName || prev.motherName,
+      personalityTraits: fields.personalityTraits?.length ? fields.personalityTraits : prev.personalityTraits,
+      schools: {
+        ...prev.schools,
+        ...(fields.schools?.elementary ? { elementary: fields.schools.elementary } : {}),
+        ...(fields.schools?.highSchool ? { highSchool: fields.schools.highSchool } : {}),
+        ...(fields.schools?.seminary ? { seminary: fields.schools.seminary } : {}),
+        ...(fields.schools?.yeshiva ? { yeshiva: fields.schools.yeshiva } : {}),
+        ...(fields.schools?.college ? { college: fields.schools.college } : {}),
+      },
+    }));
+  }
 
   function calcAge(dob: string): number | null {
     if (!dob) return null;
@@ -65,6 +104,16 @@ export default function NewProfilePage() {
     setResumeFile(file);
   }
 
+  async function checkDuplicates(name: string) {
+    const val = name.trim();
+    if (val.length >= 3) {
+      const { data } = await supabase.from("profiles").select("id, name, gender, age, city").ilike("name", `%${val}%`);
+      setDuplicates(data || []);
+    } else {
+      setDuplicates([]);
+    }
+  }
+
   const inp = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#C4956A] focus:ring-1 focus:ring-[#C4956A]/30 bg-white";
   const lbl = "block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1";
   const sectionTitle = "text-lg font-semibold text-[#1B3A4B] border-b pb-2 mb-4";
@@ -80,7 +129,6 @@ export default function NewProfilePage() {
     let photoUrl = null;
     let resumeUrl = null;
 
-    // Upload photo
     if (photoFile) {
       const ext = photoFile.name.split(".").pop();
       const path = `${appUser.id}/${profileId}.${ext}`;
@@ -89,10 +137,9 @@ export default function NewProfilePage() {
       photoUrl = path;
     }
 
-    // Upload resume
     if (resumeFile) {
       const ext = resumeFile.name.split(".").pop();
-      const path = `${appUser.id}/${profileId}.${ext}`;
+      const path = `${appUser.id}/${profileId}-resume.${ext}`;
       const { error: upErr } = await supabase.storage.from("resumes").upload(path, resumeFile);
       if (upErr) { setError("Resume upload failed: " + upErr.message); setSaving(false); return; }
       resumeUrl = path;
@@ -153,9 +200,15 @@ export default function NewProfilePage() {
       <h1 className="text-3xl font-bold text-[#1B3A4B] mb-6" style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>Add New Profile</h1>
       <div className="bg-white rounded-xl p-6 border border-gray-200 max-w-4xl">
         {error && <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm mb-4">{error}</div>}
+
+        {/* AI Resume Reader */}
+        <div className="mb-6">
+          <AIResumeReader onFieldsExtracted={handleAIFields} />
+        </div>
+
         <form onSubmit={handleSubmit} className="space-y-6">
 
-          {/* ── Photo & Resume Upload ── */}
+          {/* Photo & Resume */}
           <div>
             <h3 className={sectionTitle} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>Photo & Resume</h3>
             <div className="grid grid-cols-2 gap-6">
@@ -174,21 +227,35 @@ export default function NewProfilePage() {
                 </div>
               </div>
               <div>
-                <label className={lbl}>Shidduch Resume (PDF or Word)</label>
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                <label className={lbl}>Shidduch Resume (their PDF/Word)</label>
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                  <p className="text-xs text-gray-500 mb-2">Upload the resume the boy/girl created. You can download it later to send to families.</p>
                   <input type="file" accept=".pdf,.doc,.docx" onChange={handleResumeSelect} className="text-sm" />
                   {resumeFile && <p className="text-sm text-green-600 mt-2">✓ {resumeFile.name}</p>}
-                  <p className="text-xs text-gray-400 mt-1">PDF or Word doc. Max 10MB.</p>
+                  <p className="text-xs text-gray-400 mt-1">PDF or Word. Max 10MB.</p>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* ── Personal Info ── */}
+          {/* Personal Info */}
           <div>
             <h3 className={sectionTitle} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>Personal Information</h3>
             <div className="grid grid-cols-2 gap-4">
-              <div><label className={lbl}>Full Name *</label><input className={inp} value={f.name} onChange={(e) => set("name", e.target.value)} required /></div>
+              <div>
+                <label className={lbl}>Full Name *</label>
+                <input className={inp} value={f.name} onChange={(e) => { set("name", e.target.value); checkDuplicates(e.target.value); }} required />
+                {duplicates.length > 0 && (
+                  <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <p className="text-xs font-medium text-amber-800 mb-1">⚠ Possible duplicates found:</p>
+                    {duplicates.map((d) => (
+                      <a key={d.id} href={`/profiles/${d.id}`} target="_blank" rel="noopener noreferrer" className="block text-xs text-amber-700 hover:underline py-0.5">
+                        {d.name} ({d.gender}, {d.age || "?"}, {d.city || "?"})
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
               <div><label className={lbl}>Gender *</label><select className={inp} value={f.gender} onChange={(e) => set("gender", e.target.value)}><option value="Girl">Girl</option><option value="Boy">Boy</option></select></div>
               <div><label className={lbl}>Date of Birth</label><input className={inp} type="date" value={f.dateOfBirth} onChange={(e) => set("dateOfBirth", e.target.value)} />{f.dateOfBirth && <span className="text-xs text-gray-400 mt-1 block">Age: {calcAge(f.dateOfBirth)}</span>}</div>
               <div><label className={lbl}>Height</label><select className={inp} value={f.height} onChange={(e) => set("height", e.target.value)}><option value="">Select...</option>{HEIGHTS.map((h) => <option key={h}>{h}</option>)}</select></div>
@@ -199,7 +266,7 @@ export default function NewProfilePage() {
             </div>
           </div>
 
-          {/* ── Religious & Lifestyle ── */}
+          {/* Religious */}
           <div>
             <h3 className={sectionTitle} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>Religious & Lifestyle</h3>
             <div className="grid grid-cols-2 gap-4">
@@ -210,12 +277,10 @@ export default function NewProfilePage() {
               <div><label className={lbl}>Smoking</label><select className={inp} value={f.smoking} onChange={(e) => set("smoking", e.target.value)}><option value="">Select...</option>{SMOKING_OPTIONS.map((h) => <option key={h}>{h}</option>)}</select></div>
               <div><label className={lbl}>Camp Attended</label><input className={inp} value={f.camp} onChange={(e) => set("camp", e.target.value)} /></div>
             </div>
-            <div className="mt-4">
-              <ChipSelect label="Languages Spoken" options={LANGUAGES} selected={f.languages} onToggle={(v) => toggleArr("languages", v)} />
-            </div>
+            <div className="mt-4"><ChipSelect label="Languages Spoken" options={LANGUAGES} selected={f.languages} onToggle={(v) => toggleArr("languages", v)} /></div>
           </div>
 
-          {/* ── Family ── */}
+          {/* Family */}
           <div>
             <h3 className={sectionTitle} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>Family</h3>
             <div className="grid grid-cols-2 gap-4">
@@ -230,7 +295,7 @@ export default function NewProfilePage() {
             <div className="mt-3"><label className={lbl}>Family Background</label><textarea className={inp + " min-h-[60px]"} value={f.familyInfo} onChange={(e) => set("familyInfo", e.target.value)} placeholder="Parents, siblings, family background..." /></div>
           </div>
 
-          {/* ── Location & Plans ── */}
+          {/* Location */}
           <div>
             <h3 className={sectionTitle} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>Location & Future Plans</h3>
             <div className="grid grid-cols-2 gap-4">
@@ -243,7 +308,7 @@ export default function NewProfilePage() {
             </div>
           </div>
 
-          {/* ── Education ── */}
+          {/* Education */}
           <div>
             <h3 className={sectionTitle} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>Education</h3>
             <div className="grid grid-cols-2 gap-4">
@@ -253,21 +318,21 @@ export default function NewProfilePage() {
             </div>
           </div>
 
-          {/* ── Personality & Description ── */}
+          {/* Personality */}
           <div>
             <h3 className={sectionTitle} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>Personality & Description</h3>
             <ChipSelect label="Personality Traits" options={PERSONALITY_TRAITS} selected={f.personalityTraits} onToggle={(v) => toggleArr("personalityTraits", v)} />
-            <div className="mt-3"><label className={lbl}>About / Description</label><textarea className={inp + " min-h-[80px]"} value={f.about} onChange={(e) => set("about", e.target.value)} placeholder="Describe this person — personality, middos, what makes them special..." /></div>
-            <div className="mt-3"><label className={lbl}>What They Are Looking For</label><textarea className={inp + " min-h-[80px]"} value={f.lookingForDescription} onChange={(e) => set("lookingForDescription", e.target.value)} placeholder="In their own words, what kind of person are they looking for..." /></div>
+            <div className="mt-3"><label className={lbl}>About / Description</label><textarea className={inp + " min-h-[80px]"} value={f.about} onChange={(e) => set("about", e.target.value)} placeholder="Describe this person..." /></div>
+            <div className="mt-3"><label className={lbl}>What They Are Looking For</label><textarea className={inp + " min-h-[80px]"} value={f.lookingForDescription} onChange={(e) => set("lookingForDescription", e.target.value)} placeholder="What kind of person are they looking for..." /></div>
           </div>
 
-          {/* ── References ── */}
+          {/* References */}
           <div>
             <h3 className={sectionTitle} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>References</h3>
-            <div><label className={lbl}>References</label><textarea className={inp + " min-h-[60px]"} value={f.references} onChange={(e) => set("references", e.target.value)} placeholder="Names and contact info of references..." /></div>
+            <div><label className={lbl}>References</label><textarea className={inp + " min-h-[60px]"} value={f.references} onChange={(e) => set("references", e.target.value)} placeholder="Names and contact info..." /></div>
           </div>
 
-          {/* ── Shadchan Controls ── */}
+          {/* Shadchan Controls */}
           <div>
             <h3 className={sectionTitle} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>Shadchan Controls</h3>
             <div className="grid grid-cols-2 gap-4 mb-3">
@@ -280,10 +345,10 @@ export default function NewProfilePage() {
                 </select>
               </div>
             </div>
-            <div><label className={lbl}>Private Shadchan Notes</label><textarea className={inp + " min-h-[60px]"} value={f.notes} onChange={(e) => set("notes", e.target.value)} placeholder="Your private notes — only you can see these..." /></div>
+            <div><label className={lbl}>Private Shadchan Notes</label><textarea className={inp + " min-h-[60px]"} value={f.notes} onChange={(e) => set("notes", e.target.value)} placeholder="Only you can see these..." /></div>
           </div>
 
-          {/* ── Match Preferences ── */}
+          {/* Preferences */}
           <div>
             <h3 className={sectionTitle} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>Match Preferences</h3>
             <div className="grid grid-cols-2 gap-4 mb-4">
@@ -300,7 +365,7 @@ export default function NewProfilePage() {
             <div className="mt-3"><label className={lbl}>Additional Preference Notes</label><textarea className={inp + " min-h-[50px]"} value={f.prefNotes} onChange={(e) => set("prefNotes", e.target.value)} /></div>
           </div>
 
-          {/* ── Submit ── */}
+          {/* Submit */}
           <div className="flex gap-3 justify-end pt-4 border-t">
             <button type="button" onClick={() => router.back()} className="px-6 py-2.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
             <button type="submit" disabled={saving} className="px-6 py-2.5 text-sm bg-[#1B3A4B] text-white rounded-lg hover:bg-[#244E63] disabled:opacity-50">{saving ? "Saving..." : "Create Profile"}</button>
