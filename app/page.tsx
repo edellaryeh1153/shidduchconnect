@@ -1,17 +1,42 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth-context";
+import { supabase } from "@/lib/supabase/client";
 
 export default function Home() {
   const router = useRouter();
-  const { authUser, loading } = useAuth();
+  const [checking, setChecking] = useState(true);
+
   useEffect(() => {
-    if (!loading) router.replace(authUser ? "/dashboard" : "/login");
-  }, [authUser, loading, router]);
+    async function check() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          router.replace("/dashboard");
+        } else {
+          router.replace("/login");
+        }
+      } catch {
+        router.replace("/login");
+      }
+      setChecking(false);
+    }
+    check();
+
+    // Fallback — if nothing happens in 3 seconds, go to login
+    const timeout = setTimeout(() => {
+      router.replace("/login");
+    }, 3000);
+
+    return () => clearTimeout(timeout);
+  }, [router]);
+
   return (
     <div className="min-h-screen flex items-center justify-center">
-      <div className="w-12 h-12 rounded-lg bg-[#C4956A] flex items-center justify-center text-white font-bold text-xl mx-auto">שׁ</div>
+      <div className="text-center">
+        <div className="w-12 h-12 rounded-lg bg-[#C4956A] flex items-center justify-center text-white font-bold text-xl mx-auto mb-3">שׁ</div>
+        <p className="text-gray-500 text-sm">Loading ShidduchConnect...</p>
+      </div>
     </div>
   );
 }
