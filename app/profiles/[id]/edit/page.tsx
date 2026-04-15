@@ -17,6 +17,13 @@ export default function EditProfilePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(false);
+  const [existingPhotoUrl, setExistingPhotoUrl] = useState("");
+  const [existingResumeUrl, setExistingResumeUrl] = useState("");
+  const [existingResumePath, setExistingResumePath] = useState("");
+  const [existingPhotoPath, setExistingPhotoPath] = useState("");
+  const [newPhotoFile, setNewPhotoFile] = useState<File | null>(null);
+  const [newPhotoPreview, setNewPhotoPreview] = useState("");
+  const [newResumeFile, setNewResumeFile] = useState<File | null>(null);
   const [f, setF] = useState({
     name: "", gender: "Girl", dateOfBirth: "", height: "", hairColor: "", eyeColor: "",
     skinTone: "", build: "", hashkafa: "", city: "", state: "", occupation: "",
@@ -76,17 +83,71 @@ export default function EditProfilePage() {
           prefBuild: p.preferences?.build || [], prefLearning: p.preferences?.learningStatus || [],
           prefSmoking: p.preferences?.smoking || "", prefNotes: p.preferences?.notes || "",
         });
+        // Load existing photo
+        if (p.photo_url) {
+          setExistingPhotoPath(p.photo_url);
+          const { data: photoData } = await supabase.storage.from("photos").createSignedUrl(p.photo_url, 3600);
+          if (photoData?.signedUrl) setExistingPhotoUrl(photoData.signedUrl);
+        }
+        // Load existing resume
+        if (p.resume_url) {
+          setExistingResumePath(p.resume_url);
+          const { data: resumeData } = await supabase.storage.from("resumes").createSignedUrl(p.resume_url, 3600);
+          if (resumeData?.signedUrl) setExistingResumeUrl(resumeData.signedUrl);
+        }
       }
       setLoaded(true);
     }
     load();
   }, [id]);
 
+  function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { setError("Photo must be under 5MB."); return; }
+    setNewPhotoFile(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => setNewPhotoPreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  }
+
+  function handleResumeSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { setError("Resume must be under 10MB."); return; }
+    setNewResumeFile(file);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!f.name.trim()) { setError("Name is required."); return; }
     setSaving(true); setError("");
     const age = calcAge(f.dateOfBirth);
+
+    let photoUrl = existingPhotoPath;
+    let resumeUrl = existingResumePath;
+
+    // Upload new photo if selected
+    if (newPhotoFile) {
+      // Delete old photo if exists
+      if (existingPhotoPath) await supabase.storage.from("photos").remove([existingPhotoPath]);
+      const ext = newPhotoFile.name.split(".").pop();
+      const path = `${appUser!.id}/${id}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("photos").upload(path, newPhotoFile, { upsert: true });
+      if (upErr) { setError("Photo upload failed: " + upErr.message); setSaving(false); return; }
+      photoUrl = path;
+    }
+
+    // Upload new resume if selected
+    if (newResumeFile) {
+      if (existingResumePath) await supabase.storage.from("resumes").remove([existingResumePath]);
+      const ext = newResumeFile.name.split(".").pop();
+      const path = `${appUser!.id}/${id}-resume.${ext}`;
+      const { error: upErr } = await supabase.storage.from("resumes").upload(path, newResumeFile, { upsert: true });
+      if (upErr) { setError("Resume upload failed: " + upErr.message); setSaving(false); return; }
+      resumeUrl = path;
+    }
+
     const { error: err } = await supabase.from("profiles").update({
       name: f.name.trim(), gender: f.gender, age,
       date_of_birth: f.dateOfBirth || null, height: f.height,
@@ -103,6 +164,7 @@ export default function EditProfilePage() {
       about: f.about, family_info: f.familyInfo, references: f.references, resume: f.resume,
       personal_phone: f.personalPhone, mother_name: f.motherName, mother_phone: f.motherPhone,
       father_name: f.fatherName, father_phone: f.fatherPhone, notes: f.notes, schools: f.schools,
+      photo_url: photoUrl || null, resume_url: resumeUrl || null,
       preferences: {
         ageMin: f.prefAgeMin, ageMax: f.prefAgeMax, heightMin: f.prefHeightMin,
         heightMax: f.prefHeightMax, hashkafa: f.prefHashkafa, hairColor: f.prefHair,
@@ -149,6 +211,44 @@ export default function EditProfilePage() {
         {error && <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm mb-4">{error}</div>}
         <form onSubmit={handleSubmit} className="space-y-6">
 
+          {/* Photo & Resume */}
+          <div>
+            <h3 className={secHead} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>Photo & Resume</h3>
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <label className={lbl}>Profile Photo</label>
+                <div className="flex items-center gap-4">
+                  {(newPhotoPreview || existingPhotoUrl) ? (
+                    <img src={newPhotoPreview || existingPhotoUrl} alt="Photo" className="w-20 h-20 rounded-full object-cover border-2 border-[#C4956A]" />
+                  ) : (
+                    <div className="w-20 h-20 rounded-full bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 text-xs">No photo</div>
+                  )}
+                  <div>
+                    <input type="file" accept="image/*" onChange={handlePhotoSelect} className="text-sm" />
+                    <p className="text-xs text-gray-400 mt-1">JPG, PNG. Max 5MB.</p>
+                    {existingPhotoUrl && !newPhotoFile && <p className="text-xs text-green-600 mt-0.5">✓ Photo on file</p>}
+                    {newPhotoFile && <p className="text-xs text-blue-600 mt-0.5">New photo selected — will replace current</p>}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className={lbl}>Shidduch Resume (their PDF/Word)</label>
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                  <p className="text-xs text-gray-500 mb-2">This is the resume the boy/girl created themselves. You can download it and send to families.</p>
+                  <input type="file" accept=".pdf,.doc,.docx" onChange={handleResumeSelect} className="text-sm" />
+                  {newResumeFile && <p className="text-sm text-blue-600 mt-2">New file: {newResumeFile.name}</p>}
+                  {existingResumeUrl && !newResumeFile && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className="text-xs text-green-600">✓ Resume on file</span>
+                      <a href={existingResumeUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-[#C4956A] hover:underline">Download current →</a>
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-400 mt-1">PDF or Word. Max 10MB.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Personal Info */}
           <div>
             <h3 className={secHead} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>Personal Information</h3>
@@ -164,28 +264,26 @@ export default function EditProfilePage() {
             </div>
           </div>
 
-          {/* Religious & Lifestyle */}
+          {/* Religious */}
           <div>
             <h3 className={secHead} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>Religious & Lifestyle</h3>
             <div className="grid grid-cols-2 gap-4">
               <div><label className={lbl}>Hashkafa</label><select className={inp} value={f.hashkafa} onChange={(e) => set("hashkafa", e.target.value)}><option value="">Select...</option>{HASHKAFOS.map((h) => <option key={h}>{h}</option>)}</select></div>
-              <div><label className={lbl}>Learning / Working Status</label><select className={inp} value={f.learningStatus} onChange={(e) => set("learningStatus", e.target.value)}><option value="">Select...</option>{LEARNING_STATUSES.map((h) => <option key={h}>{h}</option>)}</select></div>
+              <div><label className={lbl}>Learning / Working</label><select className={inp} value={f.learningStatus} onChange={(e) => set("learningStatus", e.target.value)}><option value="">Select...</option>{LEARNING_STATUSES.map((h) => <option key={h}>{h}</option>)}</select></div>
               <div><label className={lbl}>Shul</label><input className={inp} value={f.shul} onChange={(e) => set("shul", e.target.value)} /></div>
               <div><label className={lbl}>Rav / Rabbi</label><input className={inp} value={f.rav} onChange={(e) => set("rav", e.target.value)} /></div>
               <div><label className={lbl}>Smoking</label><select className={inp} value={f.smoking} onChange={(e) => set("smoking", e.target.value)}><option value="">Select...</option>{SMOKING_OPTIONS.map((h) => <option key={h}>{h}</option>)}</select></div>
-              <div><label className={lbl}>Camp Attended</label><input className={inp} value={f.camp} onChange={(e) => set("camp", e.target.value)} /></div>
+              <div><label className={lbl}>Camp</label><input className={inp} value={f.camp} onChange={(e) => set("camp", e.target.value)} /></div>
             </div>
-            <div className="mt-4">
-              <ChipSelect label="Languages Spoken" options={LANGUAGES} selected={f.languages} onToggle={(v) => toggleArr("languages", v)} />
-            </div>
+            <div className="mt-4"><ChipSelect label="Languages" options={LANGUAGES} selected={f.languages} onToggle={(v) => toggleArr("languages", v)} /></div>
           </div>
 
           {/* Family */}
           <div>
             <h3 className={secHead} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>Family</h3>
             <div className="grid grid-cols-2 gap-4">
-              <div><label className={lbl}>Number of Siblings</label><input className={inp} type="number" min="0" max="20" value={f.numSiblings} onChange={(e) => set("numSiblings", e.target.value)} /></div>
-              <div><label className={lbl}>Position in Family</label><select className={inp} value={f.positionInFamily} onChange={(e) => set("positionInFamily", e.target.value)}><option value="">Select...</option>{POSITION_OPTIONS.map((h) => <option key={h}>{h}</option>)}</select></div>
+              <div><label className={lbl}>Siblings</label><input className={inp} type="number" min="0" value={f.numSiblings} onChange={(e) => set("numSiblings", e.target.value)} /></div>
+              <div><label className={lbl}>Position</label><select className={inp} value={f.positionInFamily} onChange={(e) => set("positionInFamily", e.target.value)}><option value="">Select...</option>{POSITION_OPTIONS.map((h) => <option key={h}>{h}</option>)}</select></div>
               <div><label className={lbl}>Father Name</label><input className={inp} value={f.fatherName} onChange={(e) => set("fatherName", e.target.value)} /></div>
               <div><label className={lbl}>Father Phone</label><input className={inp} value={f.fatherPhone} onChange={(e) => set("fatherPhone", e.target.value)} /></div>
               <div><label className={lbl}>Mother Name</label><input className={inp} value={f.motherName} onChange={(e) => set("motherName", e.target.value)} /></div>
@@ -195,13 +293,13 @@ export default function EditProfilePage() {
             <div className="mt-3"><label className={lbl}>Family Background</label><textarea className={inp + " min-h-[60px]"} value={f.familyInfo} onChange={(e) => set("familyInfo", e.target.value)} /></div>
           </div>
 
-          {/* Location & Plans */}
+          {/* Location */}
           <div>
-            <h3 className={secHead} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>Location & Future Plans</h3>
+            <h3 className={secHead} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>Location & Plans</h3>
             <div className="grid grid-cols-2 gap-4">
               <div><label className={lbl}>City</label><input className={inp} value={f.city} onChange={(e) => set("city", e.target.value)} /></div>
               <div><label className={lbl}>State</label><input className={inp} value={f.state} onChange={(e) => set("state", e.target.value)} /></div>
-              <div><label className={lbl}>Where Looking to Live</label><input className={inp} value={f.whereToLive} onChange={(e) => set("whereToLive", e.target.value)} /></div>
+              <div><label className={lbl}>Where to Live</label><input className={inp} value={f.whereToLive} onChange={(e) => set("whereToLive", e.target.value)} /></div>
               <div><label className={lbl}>Occupation</label><input className={inp} value={f.occupation} onChange={(e) => set("occupation", e.target.value)} /></div>
               <div><label className={lbl}>Ready to Date</label><select className={inp} value={f.readyToDate} onChange={(e) => set("readyToDate", e.target.value)}>{READY_OPTIONS.map((h) => <option key={h}>{h}</option>)}</select></div>
               <div><label className={lbl}>Available From</label><input className={inp} type="date" value={f.dateAvailable} onChange={(e) => set("dateAvailable", e.target.value)} /></div>
@@ -216,35 +314,25 @@ export default function EditProfilePage() {
 
           {/* Personality */}
           <div>
-            <h3 className={secHead} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>Personality & Description</h3>
-            <ChipSelect label="Personality Traits" options={PERSONALITY_TRAITS} selected={f.personalityTraits} onToggle={(v) => toggleArr("personalityTraits", v)} />
-            <div className="mt-3"><label className={lbl}>About / Description</label><textarea className={inp + " min-h-[80px]"} value={f.about} onChange={(e) => set("about", e.target.value)} /></div>
-            <div className="mt-3"><label className={lbl}>What They Are Looking For</label><textarea className={inp + " min-h-[80px]"} value={f.lookingForDescription} onChange={(e) => set("lookingForDescription", e.target.value)} /></div>
+            <h3 className={secHead} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>Personality</h3>
+            <ChipSelect label="Traits" options={PERSONALITY_TRAITS} selected={f.personalityTraits} onToggle={(v) => toggleArr("personalityTraits", v)} />
+            <div className="mt-3"><label className={lbl}>About</label><textarea className={inp + " min-h-[80px]"} value={f.about} onChange={(e) => set("about", e.target.value)} /></div>
+            <div className="mt-3"><label className={lbl}>Looking For</label><textarea className={inp + " min-h-[80px]"} value={f.lookingForDescription} onChange={(e) => set("lookingForDescription", e.target.value)} /></div>
           </div>
 
           {/* References */}
           <div>
-            <h3 className={secHead} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>References & Resume</h3>
-            <div className="space-y-3">
-              <div><label className={lbl}>References</label><textarea className={inp + " min-h-[60px]"} value={f.references} onChange={(e) => set("references", e.target.value)} /></div>
-              <div><label className={lbl}>Resume / Additional Info</label><textarea className={inp + " min-h-[60px]"} value={f.resume} onChange={(e) => set("resume", e.target.value)} /></div>
-            </div>
+            <h3 className={secHead} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>References</h3>
+            <div><label className={lbl}>References</label><textarea className={inp + " min-h-[60px]"} value={f.references} onChange={(e) => set("references", e.target.value)} /></div>
           </div>
 
           {/* Shadchan Controls */}
           <div>
             <h3 className={secHead} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>Shadchan Controls</h3>
             <div className="grid grid-cols-2 gap-4 mb-3">
-              <div>
-                <label className={lbl}>Profile Visibility</label>
-                <select className={inp} value={f.profileVisibility} onChange={(e) => set("profileVisibility", e.target.value)}>
-                  <option value="private">Private — only you can see</option>
-                  <option value="shared">Shared — visible to shadchanim you choose</option>
-                  <option value="organization">Organization — all shadchanim can see</option>
-                </select>
-              </div>
+              <div><label className={lbl}>Visibility</label><select className={inp} value={f.profileVisibility} onChange={(e) => set("profileVisibility", e.target.value)}><option value="private">Private — only you</option><option value="shared">Shared — chosen shadchanim</option><option value="organization">Organization — all</option></select></div>
             </div>
-            <div><label className={lbl}>Private Shadchan Notes</label><textarea className={inp + " min-h-[60px]"} value={f.notes} onChange={(e) => set("notes", e.target.value)} /></div>
+            <div><label className={lbl}>Private Notes</label><textarea className={inp + " min-h-[60px]"} value={f.notes} onChange={(e) => set("notes", e.target.value)} /></div>
           </div>
 
           {/* Preferences */}
@@ -255,13 +343,13 @@ export default function EditProfilePage() {
               <div><label className={lbl}>Age Max</label><input className={inp} type="number" value={f.prefAgeMax} onChange={(e) => set("prefAgeMax", e.target.value)} /></div>
               <div><label className={lbl}>Height Min</label><select className={inp} value={f.prefHeightMin} onChange={(e) => set("prefHeightMin", e.target.value)}><option value="">Any</option>{HEIGHTS.map((h) => <option key={h}>{h}</option>)}</select></div>
               <div><label className={lbl}>Height Max</label><select className={inp} value={f.prefHeightMax} onChange={(e) => set("prefHeightMax", e.target.value)}><option value="">Any</option>{HEIGHTS.map((h) => <option key={h}>{h}</option>)}</select></div>
-              <div><label className={lbl}>Smoking Preference</label><select className={inp} value={f.prefSmoking} onChange={(e) => set("prefSmoking", e.target.value)}><option value="">No Preference</option><option value="No">Non-smoker only</option><option value="Yes">Open to smoker</option></select></div>
+              <div><label className={lbl}>Smoking</label><select className={inp} value={f.prefSmoking} onChange={(e) => set("prefSmoking", e.target.value)}><option value="">No Preference</option><option value="No">Non-smoker only</option><option value="Yes">Open</option></select></div>
             </div>
-            <ChipSelect label="Preferred Hashkafa" options={HASHKAFOS} selected={f.prefHashkafa} onToggle={(v) => toggleArr("prefHashkafa", v)} />
-            <ChipSelect label="Preferred Hair Color" options={HAIR_COLORS} selected={f.prefHair} onToggle={(v) => toggleArr("prefHair", v)} />
-            <ChipSelect label="Preferred Build" options={BUILDS} selected={f.prefBuild} onToggle={(v) => toggleArr("prefBuild", v)} />
-            <ChipSelect label="Preferred Learning Status" options={LEARNING_STATUSES} selected={f.prefLearning} onToggle={(v) => toggleArr("prefLearning", v)} />
-            <div className="mt-3"><label className={lbl}>Additional Preference Notes</label><textarea className={inp + " min-h-[50px]"} value={f.prefNotes} onChange={(e) => set("prefNotes", e.target.value)} /></div>
+            <ChipSelect label="Hashkafa" options={HASHKAFOS} selected={f.prefHashkafa} onToggle={(v) => toggleArr("prefHashkafa", v)} />
+            <ChipSelect label="Hair Color" options={HAIR_COLORS} selected={f.prefHair} onToggle={(v) => toggleArr("prefHair", v)} />
+            <ChipSelect label="Build" options={BUILDS} selected={f.prefBuild} onToggle={(v) => toggleArr("prefBuild", v)} />
+            <ChipSelect label="Learning Status" options={LEARNING_STATUSES} selected={f.prefLearning} onToggle={(v) => toggleArr("prefLearning", v)} />
+            <div className="mt-3"><label className={lbl}>Preference Notes</label><textarea className={inp + " min-h-[50px]"} value={f.prefNotes} onChange={(e) => set("prefNotes", e.target.value)} /></div>
           </div>
 
           {/* Submit */}

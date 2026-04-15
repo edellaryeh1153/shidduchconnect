@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase/client";
 import { useAuth, canDo } from "@/lib/auth-context";
 import AppShell from "@/components/AppShell";
 import { SCHOOLS_GIRL, SCHOOLS_BOY, STATUS_COLORS } from "@/types";
+import { generateProfilePDF } from "@/components/ProfilePDF";
 
 export default function ProfileDetailPage() {
   const { id } = useParams();
@@ -164,6 +165,7 @@ export default function ProfileDetailPage() {
           </div>
           {(isOwner || isAdmin) && (
             <div className="flex gap-2">
+              <button onClick={() => generateProfilePDF(profile, photoUrl)} className="px-4 py-2 text-sm border border-[#5C8A5C] text-[#5C8A5C] rounded-lg hover:bg-gray-50">📄 Export PDF</button>
               <button onClick={() => setShowShare(!showShare)} className="px-4 py-2 text-sm border border-[#6B8E9B] text-[#6B8E9B] rounded-lg hover:bg-gray-50">Share</button>
               <Link href={`/profiles/${id}/edit`} className="px-4 py-2 text-sm border border-[#1B3A4B] text-[#1B3A4B] rounded-lg hover:bg-gray-50">Edit</Link>
               <button onClick={handleDelete} className="px-4 py-2 text-sm border border-red-400 text-red-600 rounded-lg hover:bg-red-50">Delete</button>
