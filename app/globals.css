@@ -1,17 +1,95 @@
 @import "tailwindcss";
 
+:root {
+  --navy: #1B3A4B;
+  --gold: #C4956A;
+  --teal: #6B8E9B;
+  --sage: #5C8A5C;
+  --warm-bg: #F7F5F0;
+  --card-bg: #FFFFFF;
+  --border: #ECE9E1;
+}
+
 body {
   font-family: 'Crimson Pro', Georgia, serif;
+  background: var(--warm-bg);
+  color: #333;
+  -webkit-font-smoothing: antialiased;
 }
 
 h1, h2, h3, h4 {
   font-family: 'Cormorant Garamond', Georgia, serif;
+  color: var(--navy);
 }
 
 input, select, textarea, button {
   font-family: 'Crimson Pro', Georgia, serif;
 }
 
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #aaa; }
+/* Better form elements */
+input[type="text"], input[type="email"], input[type="password"],
+input[type="number"], input[type="date"], input[type="datetime-local"],
+select, textarea {
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: var(--gold) !important;
+  box-shadow: 0 0 0 3px rgba(196, 149, 106, 0.1) !important;
+  outline: none;
+}
+
+/* Better buttons */
+button {
+  transition: all 0.15s ease;
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* Links */
+a {
+  transition: color 0.15s;
+}
+
+/* Cards hover */
+.hover\:shadow-md:hover {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d0cdc5; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #b0ada5; }
+
+/* Smooth page transitions */
+main {
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Print styles */
+@media print {
+  aside, nav, button { display: none !important; }
+  main { padding: 0 !important; }
+}
+
+/* Better select arrows */
+select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px !important;
+}
+
+/* Chip/tag animations */
+.rounded-full {
+  transition: all 0.15s ease;
+}
