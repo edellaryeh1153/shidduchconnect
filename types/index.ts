@@ -27,7 +27,6 @@ export type Profile = {
   city: string;
   state: string;
   occupation: string;
-  // New fields
   learning_status: string;
   smoking: string;
   num_siblings: number | null;
@@ -42,12 +41,12 @@ export type Profile = {
   ready_to_date: string;
   date_available: string;
   profile_visibility: 'private' | 'shared' | 'organization';
-  // Extended info
   about: string;
   family_info: string;
   references: string;
   resume: string;
   photo_url: string | null;
+  resume_url: string | null;
   personal_phone: string;
   mother_name: string;
   mother_phone: string;
@@ -77,6 +76,9 @@ export type Match = {
   boy_profile_id: string;
   girl_profile_id: string;
   status: string;
+  contacted_first: string;
+  boy_response_notes: string;
+  girl_response_notes: string;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -96,6 +98,23 @@ export type MatchNote = {
   author?: AppUser;
 };
 
+export type ScheduledDate = {
+  id: string;
+  match_id: string;
+  date_time: string;
+  location: string;
+  date_number: number;
+  notes: string;
+  status: string;
+  boy_feedback: string;
+  girl_feedback: string;
+  boy_wants_another: string;
+  girl_wants_another: string;
+  end_reason: string;
+  created_by: string;
+  created_at: string;
+};
+
 export type ProfileShare = {
   id: string;
   profile_id: string;
@@ -112,11 +131,45 @@ export const SKIN_TONES = ['Fair', 'Light', 'Medium', 'Olive', 'Tan', 'Dark'];
 export const EYE_COLORS = ['Brown', 'Hazel', 'Green', 'Blue', 'Gray'];
 export const HASHKAFOS = ['Chassidish', 'Yeshivish', 'Modern Orthodox Machmir', 'Modern Orthodox', 'Modern Orthodox Liberal', 'Sephardi', 'Other'];
 export const BUILDS = ['Slim', 'Average', 'Athletic', 'Heavy'];
-export const MATCH_STATUSES = ['Suggested', 'Researching', 'Contacted', 'Dating', 'Engaged', 'Married', 'Ended'];
-export const STATUS_COLORS: Record<string, string> = {
-  Suggested: '#8B7355', Researching: '#6B8E9B', Contacted: '#7B8D6E', Dating: '#C4956A',
-  Engaged: '#9B7CB8', Married: '#5C8A5C', Ended: '#A0736C',
+
+export const MATCH_STATUSES = [
+  'Suggested', 'Sent to Boy Side', 'Boy Said Yes', 'Boy Said No',
+  'Sent to Girl Side', 'Girl Said Yes', 'Girl Said No',
+  'Both Agreed', 'Dating', 'Engaged', 'Married', 'Ended',
+];
+
+export const MATCH_STATUS_FLOW: Record<string, string[]> = {
+  'Suggested': ['Sent to Boy Side', 'Sent to Girl Side', 'Ended'],
+  'Sent to Boy Side': ['Boy Said Yes', 'Boy Said No', 'Ended'],
+  'Boy Said Yes': ['Sent to Girl Side', 'Ended'],
+  'Boy Said No': ['Ended'],
+  'Sent to Girl Side': ['Girl Said Yes', 'Girl Said No', 'Ended'],
+  'Girl Said Yes': ['Both Agreed', 'Ended'],
+  'Girl Said No': ['Ended'],
+  'Both Agreed': ['Dating', 'Ended'],
+  'Dating': ['Engaged', 'Ended'],
+  'Engaged': ['Married', 'Ended'],
+  'Married': [],
+  'Ended': ['Suggested'],
 };
+
+export const STATUS_COLORS: Record<string, string> = {
+  'Suggested': '#8B7355',
+  'Sent to Boy Side': '#6B8E9B',
+  'Boy Said Yes': '#7B8D6E',
+  'Boy Said No': '#A0736C',
+  'Sent to Girl Side': '#6B8E9B',
+  'Girl Said Yes': '#7B8D6E',
+  'Girl Said No': '#A0736C',
+  'Both Agreed': '#5C8A5C',
+  'Dating': '#C4956A',
+  'Engaged': '#9B7CB8',
+  'Married': '#5C8A5C',
+  'Ended': '#A0736C',
+};
+
+export const DATE_FEEDBACK_OPTIONS = ['Yes', 'No', 'Maybe'];
+
 export const HEIGHTS: string[] = [];
 for (let f = 4; f <= 6; f++) for (let i = 0; i < 12; i++) { if (f === 6 && i > 6) break; HEIGHTS.push(`${f}'${i}"`); }
 
