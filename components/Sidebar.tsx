@@ -11,12 +11,16 @@ export default function Sidebar() {
     { href: "/dashboard", label: "Dashboard", icon: "◈" },
     { href: "/profiles", label: "Profiles", icon: "◉" },
     { href: "/matches", label: "Matches", icon: "⟡" },
+    { href: "/compare", label: "Compare", icon: "⇆" },
     { href: "/recommendations", label: "Recommendations", icon: "✦" },
     { href: "/ai", label: "AI Shadchan", icon: "✧" },
   ];
   const adminItems = [
     { href: "/admin/users", label: "Manage Users", icon: "⚙" },
     { href: "/admin/audit", label: "Audit Log", icon: "📋" },
+  ];
+  const bottomItems = [
+    { href: "/settings", label: "Settings", icon: "⚙" },
   ];
   function navLink(item: { href: string; label: string; icon: string }) {
     const active = pathname === item.href || pathname.startsWith(item.href + "/");
@@ -45,6 +49,8 @@ export default function Sidebar() {
           <div className="px-4 mt-6 mb-2 text-xs text-[#6B8E9B] uppercase tracking-wider">Admin</div>
           {adminItems.map(navLink)}
         </>)}
+        <div className="px-4 mt-6 mb-2 text-xs text-[#6B8E9B] uppercase tracking-wider">Account</div>
+        {bottomItems.map(navLink)}
       </nav>
       <div className="p-4 border-t border-white/10">
         <div className="text-sm font-medium">{appUser.name}</div>
