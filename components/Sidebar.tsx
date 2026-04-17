@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import NotificationBell from "@/components/NotificationBell";
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -11,11 +12,14 @@ export default function Sidebar() {
   const navItems = [
     { href: "/dashboard", label: "Dashboard", icon: "◈" },
     { href: "/profiles", label: "Profiles", icon: "◉" },
+    { href: "/quick-add", label: "Quick Add", icon: "⚡" },
     { href: "/matches", label: "Matches", icon: "⟡" },
     { href: "/compare", label: "Compare", icon: "⇆" },
     { href: "/recommendations", label: "Recommendations", icon: "✦" },
     { href: "/ai", label: "AI Shadchan", icon: "✧" },
+    { href: "/favorites", label: "Watchlist", icon: "★" },
   ];
+
   const adminItems = [
     { href: "/admin/users", label: "Manage Users", icon: "⚙" },
     { href: "/admin/audit", label: "Audit Log", icon: "📋" },
@@ -54,17 +58,20 @@ export default function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 py-5">
+      <nav className="flex-1 py-5 overflow-y-auto">
         <div className="px-5 mb-2 text-[10px] text-[#4A7080] uppercase tracking-[0.15em] font-medium">Menu</div>
-        {navItems.map(navLink)}
+        {navItems.map((item) => navLink(item))}
 
-        {appUser.role === "admin" && (<>
-          <div className="px-5 mt-6 mb-2 text-[10px] text-[#4A7080] uppercase tracking-[0.15em] font-medium">Admin</div>
-          {adminItems.map(navLink)}
-        </>)}
+        {appUser.role === "admin" && (
+          <>
+            <div className="px-5 mt-6 mb-2 text-[10px] text-[#4A7080] uppercase tracking-[0.15em] font-medium">Admin</div>
+            {adminItems.map((item) => navLink(item))}
+          </>
+        )}
 
         <div className="px-5 mt-6 mb-2 text-[10px] text-[#4A7080] uppercase tracking-[0.15em] font-medium">Account</div>
         {navLink({ href: "/settings", label: "Settings", icon: "⚙" })}
+        {navLink({ href: "/help", label: "Help & FAQ", icon: "?" })}
       </nav>
 
       {/* User */}
@@ -77,6 +84,7 @@ export default function Sidebar() {
             <div className="text-sm font-medium truncate">{appUser.name}</div>
             <div className="text-[10px] text-[#6B8E9B] capitalize">{appUser.role}</div>
           </div>
+          <NotificationBell />
         </div>
         <button onClick={signOut} className="mt-3 w-full text-left text-xs text-[#6B8E9B] hover:text-white transition-colors px-1">
           ← Sign Out
