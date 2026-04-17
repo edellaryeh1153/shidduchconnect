@@ -9,7 +9,10 @@ import { SCHOOLS_GIRL, SCHOOLS_BOY, STATUS_COLORS } from "@/types";
 import { generateProfilePDF } from "@/components/ProfilePDF";
 import PhotoGallery from "@/components/PhotoGallery";
 import ProfileTags from "@/components/ProfileTags";
+import FavoriteButton from "@/components/FavoriteButton";
 import { computeScore } from "@/lib/scoring";
+import ProfileTimeline from "@/components/ProfileTimeline";
+import FamilyLinks from "@/components/FamilyLinks";
 
 export default function ProfileDetailPage() {
   const { id } = useParams();
@@ -31,7 +34,6 @@ export default function ProfileDetailPage() {
     const { data: p } = await supabase.from("profiles").select("*").eq("id", id).single();
     if (p) {
       setProfile(p);
-
       if (p.photo_url) {
         const { data: photoData } = await supabase.storage.from("photos").createSignedUrl(p.photo_url, 3600);
         if (photoData?.signedUrl) setPhotoUrl(photoData.signedUrl);
@@ -40,7 +42,6 @@ export default function ProfileDetailPage() {
         const { data: resumeData } = await supabase.storage.from("resumes").createSignedUrl(p.resume_url, 3600);
         if (resumeData?.signedUrl) setResumeDownloadUrl(resumeData.signedUrl);
       }
-
       const [mRes, sRes, uRes] = await Promise.all([
         supabase.from("matches")
           .select("*, boy_profile:profiles!boy_profile_id(name), girl_profile:profiles!girl_profile_id(name), match_notes(id, note_text, note_type, created_at)")
@@ -52,7 +53,6 @@ export default function ProfileDetailPage() {
       setMatches(mRes.data || []);
       setShares(sRes.data || []);
       setAllUsers(uRes.data || []);
-
       // AI suggestions
       const { data: allProfiles } = await supabase.from("profiles").select("*");
       if (allProfiles) {
@@ -107,7 +107,6 @@ export default function ProfileDetailPage() {
   const isOwner = profile.created_by === appUser?.id;
   const isAdmin = appUser?.role === "admin";
   const schoolList = isGirl ? SCHOOLS_GIRL : SCHOOLS_BOY;
-
   const personalInfo = [
     ["Age", profile.age ? `${profile.age}${profile.date_of_birth ? ` (DOB: ${new Date(profile.date_of_birth).toLocaleDateString()})` : ""}` : null],
     ["Height", profile.height], ["Hair", profile.hair_color], ["Eyes", profile.eye_color],
@@ -116,39 +115,29 @@ export default function ProfileDetailPage() {
     ["Where Looking to Live", profile.where_to_live], ["Occupation", profile.occupation],
     ["Personal Phone", profile.personal_phone],
   ].filter(([, v]) => v);
-
   const religiousInfo = [
     ["Hashkafa", profile.hashkafa], ["Learning Status", profile.learning_status],
     ["Shul", profile.shul], ["Rav / Rabbi", profile.rav],
     ["Smoking", profile.smoking], ["Camp", profile.camp], ["Languages", profile.languages],
   ].filter(([, v]) => v);
-
   const familyDetails = [
     ["Siblings", profile.num_siblings != null ? `${profile.num_siblings}${profile.position_in_family ? ` (${profile.position_in_family})` : ""}` : null],
     ["Father", profile.father_name ? `${profile.father_name}${profile.father_phone ? ` — ${profile.father_phone}` : ""}` : null],
     ["Mother", profile.mother_name ? `${profile.mother_name}${profile.mother_phone ? ` — ${profile.mother_phone}` : ""}` : null],
   ].filter(([, v]) => v);
-
   const statusInfo = [
     ["Ready to Date", profile.ready_to_date],
     ["Available From", profile.date_available ? new Date(profile.date_available).toLocaleDateString() : null],
     ["Visibility", profile.profile_visibility === "private" ? "🔒 Private" : profile.profile_visibility === "shared" ? "👥 Shared" : "🏢 Organization"],
   ].filter(([, v]) => v);
-
-  const availableToShare = allUsers.filter(
-    (u) => u.id !== appUser?.id && !shares.find((s) => s.shared_with === u.id)
-  );
-
+  const availableToShare = allUsers.filter((u) => u.id !== appUser?.id && !shares.find((s) => s.shared_with === u.id));
   const secTitle = "text-base font-semibold text-[#1B3A4B] border-b pb-1 mb-3";
 
   function InfoGrid({ items }: { items: (string | null)[][] }) {
     return (
       <div className="grid grid-cols-2 gap-3">
         {items.map(([k, v]) => (
-          <div key={k as string}>
-            <div className="text-[10px] text-gray-400 uppercase tracking-wider">{k}</div>
-            <div className="text-sm font-medium">{v}</div>
-          </div>
+          <div key={k as string}><div className="text-[10px] text-gray-400 uppercase tracking-wider">{k}</div><div className="text-sm font-medium">{v}</div></div>
         ))}
       </div>
     );
@@ -170,14 +159,12 @@ export default function ProfileDetailPage() {
               </div>
             )}
             <div>
-              <h1 className="text-2xl font-bold text-[#1B3A4B]" style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>{profile.name}</h1>
-              <p className="text-sm text-gray-500">
-                {profile.gender} · {profile.hashkafa}
-                {profile.ready_to_date && profile.ready_to_date !== "Yes" ? ` · ${profile.ready_to_date}` : ""}
-              </p>
-              <p className="text-xs text-gray-400 mt-0.5">
-                {profile.profile_visibility === "private" ? "🔒 Private" : profile.profile_visibility === "shared" ? "👥 Shared" : "🏢 Organization"}
-              </p>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold text-[#1B3A4B]" style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>{profile.name}</h1>
+                <FavoriteButton profileId={id as string} />
+              </div>
+              <p className="text-sm text-gray-500">{profile.gender} · {profile.hashkafa}{profile.ready_to_date && profile.ready_to_date !== "Yes" ? ` · ${profile.ready_to_date}` : ""}</p>
+              <p className="text-xs text-gray-400 mt-0.5">{profile.profile_visibility === "private" ? "🔒 Private" : profile.profile_visibility === "shared" ? "👥 Shared" : "🏢 Organization"}</p>
             </div>
           </div>
           {(isOwner || isAdmin) && (
@@ -227,14 +214,9 @@ export default function ProfileDetailPage() {
           <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-between">
             <div>
               <div className="text-sm font-medium text-[#1B3A4B]">📄 Shidduch Resume Attached</div>
-              <div className="text-xs text-gray-500 mt-0.5">
-                {isOwner ? "This is the resume they gave you. Only you and shadchanim you share with can access it." : "Shared with you by the profile owner."}
-              </div>
+              <div className="text-xs text-gray-500 mt-0.5">{isOwner ? "This is the resume they gave you. Only you and shared shadchanim can access it." : "Shared with you by the profile owner."}</div>
             </div>
-            <a href={resumeDownloadUrl} target="_blank" rel="noopener noreferrer"
-              className="px-4 py-2 bg-[#1B3A4B] text-white rounded-lg text-sm hover:bg-[#244E63] transition-colors">
-              Download Resume
-            </a>
+            <a href={resumeDownloadUrl} target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-[#1B3A4B] text-white rounded-lg text-sm hover:bg-[#244E63] transition-colors">Download Resume</a>
           </div>
         )}
 
@@ -245,14 +227,8 @@ export default function ProfileDetailPage() {
 
         {/* Info sections */}
         <div className="grid grid-cols-2 gap-6 mb-6">
-          <div>
-            <h3 className={secTitle} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>Personal Information</h3>
-            <InfoGrid items={personalInfo} />
-          </div>
-          <div>
-            <h3 className={secTitle} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>Religious & Lifestyle</h3>
-            <InfoGrid items={religiousInfo} />
-          </div>
+          <div><h3 className={secTitle} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>Personal Information</h3><InfoGrid items={personalInfo} /></div>
+          <div><h3 className={secTitle} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>Religious & Lifestyle</h3><InfoGrid items={religiousInfo} /></div>
         </div>
 
         {/* Family */}
@@ -277,10 +253,7 @@ export default function ProfileDetailPage() {
 
         {/* Dating Status */}
         {statusInfo.length > 0 && (
-          <div className="mb-6">
-            <h3 className={secTitle} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>Dating Status</h3>
-            <InfoGrid items={statusInfo} />
-          </div>
+          <div className="mb-6"><h3 className={secTitle} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>Dating Status</h3><InfoGrid items={statusInfo} /></div>
         )}
 
         {/* Personality */}
@@ -306,7 +279,7 @@ export default function ProfileDetailPage() {
         {profile.notes && isOwner && (
           <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
             <h3 className="text-sm font-semibold text-amber-800 mb-1">🔒 Your Private Notes</h3>
-            <p className="text-xs text-amber-700 mb-2">Only you can see these notes. They are not shared even when the profile is shared.</p>
+            <p className="text-xs text-amber-700 mb-2">Only you can see these notes.</p>
             <p className="text-sm text-amber-900 whitespace-pre-wrap">{profile.notes}</p>
           </div>
         )}
@@ -328,12 +301,21 @@ export default function ProfileDetailPage() {
           </div>
         )}
 
+        {/* Family Links */}
+        <div className="mb-6">
+          <FamilyLinks profileId={id as string} profileName={profile.name} canEdit={isOwner || isAdmin} />
+        </div>
+
+        {/* Timeline */}
+        <div className="mb-6">
+          <h3 className={secTitle} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>Activity Timeline</h3>
+          <ProfileTimeline profileId={id as string} />
+        </div>
+
         {/* AI Match Suggestions */}
         <div className="mb-6">
           <div className="flex justify-between items-center mb-3">
-            <h3 className={`${secTitle} flex-1`} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>
-              ✦ Suggested Matches
-            </h3>
+            <h3 className={`${secTitle} flex-1`} style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>✦ Suggested Matches</h3>
             <button onClick={() => setShowAiSuggestions(!showAiSuggestions)} className="text-xs text-[#C4956A] hover:underline ml-3">
               {showAiSuggestions ? "Hide" : `Show ${aiSuggestions.length} suggestions`}
             </button>
@@ -344,18 +326,14 @@ export default function ProfileDetailPage() {
               {aiSuggestions.map((c) => (
                 <Link key={c.id} href={`/profiles/${c.id}`} className="flex items-center justify-between p-3 border border-gray-100 rounded-lg hover:shadow-sm transition-all">
                   <div className="flex items-center gap-3">
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-semibold ${c.gender === "Girl" ? "bg-[#C4956A]" : "bg-[#1B3A4B]"}`}>
-                      {c.name?.[0]}
-                    </div>
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-semibold ${c.gender === "Girl" ? "bg-[#C4956A]" : "bg-[#1B3A4B]"}`}>{c.name?.[0]}</div>
                     <div>
                       <div className="text-sm font-medium text-[#1B3A4B]">{c.name}</div>
                       <div className="text-xs text-gray-500">{c.age && `${c.age} · `}{c.hashkafa}{c.city && ` · ${c.city}`}</div>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-lg font-bold" style={{ color: c.combined >= 70 ? "#5C8A5C" : c.combined >= 40 ? "#C4956A" : "#A0736C", fontFamily: "'Cormorant Garamond', Georgia, serif" }}>
-                      {c.combined}%
-                    </div>
+                    <div className="text-lg font-bold" style={{ color: c.combined >= 70 ? "#5C8A5C" : c.combined >= 40 ? "#C4956A" : "#A0736C", fontFamily: "'Cormorant Garamond', Georgia, serif" }}>{c.combined}%</div>
                     <div className="text-[9px] text-gray-400">Match</div>
                   </div>
                 </Link>
